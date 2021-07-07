@@ -3,51 +3,37 @@ from flask import request, jsonify
 import psycopg2 # connect (to Postgres database)
 import pkg_resources # resource_string (for retrieving sql queries)
 import configparser # (to read properties file for database host, etc.)
-from anytree import Node, LevelOrderIter
+from collections import defaultdict
 
 # Reference: https://programminghistorian.org/en/lessons/creating-apis-with-python-and-flask#lesson-goals
 
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
 
+dict_slug_subslugs = defaultdict(list) # key: slug, value: immediate subslugs
+
 @app.before_first_request
-def init():
-	print("temp")
-
-	# store the slug hierarchy in memory
-
-	# read the slug hierarchy and store it in a tree in O(N) time
+def store_slug_hierarchy():
+	""" Store each slug's immediate subslugs in memory.
+	"""
 	query = 'SELECT slug, parent_slug FROM regions'
 
 	conn = connect_database()
-	cur = conn.cursor()
-	cur.execute(query)
-
-	result = cur.fetchall()
-
-	cur.close() # close database connection
-
-	dict_slug_subslugs = dict()
-	for slug, parent_slug in result:
-		parent = Node(parent_slug)
-		child = Node(slug, parent_slug)
-
-	# TODO
-
-	# iterate the final tree and store the list of all sub-slugs for each slug
+	cursor = conn.cursor()
+	cursor.execute(query)
+	result = cursor.fetchall()
+	cursor.close() # close database connection
 	
-
-	for slug, subslug in dict_slug_subslugs.items():
-		print(x)
-		print(y)
-
-	print(jsonify(result))
+	for slug, parent_slug in result:
+		dict_slug_subslugs[parent_slug].append(slug)
 
 # E.g., http://127.0.0.1:5000/api/v1/average?origin=CNGGZ&destination=EETLL&date_from=2016-01-01&date_to=2016-01-01
 @app.route('/api/v1/average', methods=['GET'])
 def average():
-	# ensure required arguments are passed
-	args = request.args
+	""" Return average of transactions given required arguments:
+	origin, destination, date_from, date_to
+	"""
+	args = request.args # ensure required arguments are passed
 
 	origin = args.get('origin')
 	destination = args.get('destination')
@@ -61,34 +47,56 @@ def average():
 		origin_is_code = True if origin.isupper() else False
 		destination_is_code = True if destination.isupper() else False
 
+		query_params = {'origin': origin, 'destination': destination, 'date_from': date_from, 'date_to': date_to}
+
 		if origin_is_code:
 			if destination_is_code: # both are in code format
 				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_CODE_dest_CODE.sql')
-				query_params = {'orig_code': origin, 'dest_code': destination, 'date_from': date_from, 'date_to': date_to}
 			else: # origin in code format, destination in slug format
-				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_CODE_dest_CODE.sql')
-				query_params = {'orig_code': origin, 'dest_code': destination, 'date_from': date_from, 'date_to': date_to} # TODO
+				dest_subslugs = get_subslug_subset(destination)
+				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_CODE_dest_SLUG.sql')
+				query_params['dest_subslugs'] = tuple(dest_subslugs)
 		else:
 			if destination_is_code: # origin in slug format, destination in code format
-				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_CODE_dest_CODE.sql')
-				query_params = {'orig_code': origin, 'dest_code': destination, 'date_from': date_from, 'date_to': date_to} # TODO
+				orig_subslugs = get_subslug_subset(origin)
+				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_SLUG_dest_CODE.sql')
+				query_params['orig_subslugs'] = tuple(orig_subslugs)
 			else: # both are in slug format
-				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_CODE_dest_CODE.sql')
-				query_params = {'orig_code': origin, 'dest_code': destination, 'date_from': date_from, 'date_to': date_to} # TODO
+				orig_subslugs = get_subslug_subset(origin)
+				dest_subslugs = get_subslug_subset(destination)
+				query = pkg_resources.resource_string(__name__, 'queries/get_average_orig_SLUG_dest_SLUG.sql')
+				query_params['orig_subslugs'] = tuple(orig_subslugs)
+				query_params['dest_subslugs'] = tuple(dest_subslugs)
 
-		# connect to database and execute query
 		conn = connect_database()
-		cur = conn.cursor()
-		cur.execute(query, query_params)
+		cursor = conn.cursor()
+		cursor.execute(query, query_params)
 
-		result = cur.fetchone() # example result: (Decimal('1154.6666666666666667'),)
-		average = '{0:f}'.format(result[0]) # retrieve average from query result
-
-		cur.close() # close database connection
+		result = cursor.fetchall()
 		
-		return jsonify({"average":average})
+		cursor.close() # close database connection
+
+		ret = []
+		for date, decimal in result:
+			conversion = {}
+			conversion['date'] = str(date.strftime('%Y-%m-%d')) # datetime.date(2016, 1, 1) becomes 2016-01-01
+			conversion['average_price'] = str(decimal) # Decimal('1154.6666666666666667') becomes 1154.6666666666666667
+			ret.append(conversion)
+
+		return jsonify(ret)
+
+def get_subslug_subset(slug):
+	""" Return a given slug along with all of its descendant subslugs.
+	"""
+	subslugs = {slug}
+	for subslug in dict_slug_subslugs[slug]:
+		subslugs.add(subslug)
+		subslugs.update(get_subslug_subset(subslug))
+	return subslugs
 
 def connect_database():
+	""" Connect to Postgres database given settings in api.properties.
+	"""
 	config = configparser.ConfigParser()
 	config.read("api.properties")
 
