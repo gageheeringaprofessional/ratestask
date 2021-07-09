@@ -52,11 +52,11 @@ Response:
 ```bash
 [
   {
-    "average_price": "1160", 
+    "average_price": "1121", 
     "date": "2016-01-24"
   }, 
   {
-    "average_price": "1147", 
+    "average_price": "1101", 
     "date": "2016-01-25"
   }
 ]
@@ -69,7 +69,7 @@ Response:
 
 `rates_modified.sql` rather than `rates.sql` is used in order to include an auto-increment primary key for the `prices` table:
 
-```bash
+```sql
 CREATE TABLE prices (
     id SERIAL PRIMARY KEY,
     orig_code text NOT NULL,
@@ -83,8 +83,8 @@ That is the only difference between the files.
 
 ## Assumption: New codes or slugs would be processed by the API
 
-The API assumes no new codes or slugs (e.g., `united_states` or `GAGEH`) will be encountered while averages are being calculated.
+The API assumes no new slugs or codes (e.g., `united_states` or `GAGEH`) will be encountered while averages are being calculated.
 
 This assumption allows me to cache the slug hierarchy and each slug's direct ports before the first request in order to avoid redundant querying.
 
-The full API implementation would update the cache upon encountering a new slug or port.
+The full API implementation would update the cache upon encountering a new slug or code.
