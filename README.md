@@ -19,7 +19,8 @@ PGPASSWORD=ratestask psql -h 127.0.0.1 -U postgres -p 5433
 ```
 
 The API was written in Python 3.
-`cd` into the `api` directory and ensure you have required packages such as `flask` and `psycopg2` by installing the requirements specified in `setup.py`:
+
+`cd` into the `api` directory and ensure you have required packages by installing the requirements specified in `setup.py`:
 
 ```bash
 pip install .
@@ -33,12 +34,10 @@ Start the API:
 python api.py
 ```
 
-Please note that in `api.properties` port 5433 is used to connect to the database.
-
 Run formal tests:
 
 ```bash
-pytest tests/tests.py
+pytest tests.py
 ```
 
 Please note that `tests.py` assumes the API is running on `127.0.0.1:5000`
@@ -84,7 +83,7 @@ That is the only difference between the files.
 
 ## Assumption: New codes or slugs would be processed by the API
 
-The API assumes no new codes or slugs (e.g., 'united_states' or 'GAGEH') will be encountered while averages are being calculated.
+The API assumes no new codes or slugs (e.g., `united_states` or `GAGEH`) will be encountered while averages are being calculated.
 
 This assumption allows me to cache the slug hierarchy and each slug's direct ports before the first request in order to avoid redundant querying.
 

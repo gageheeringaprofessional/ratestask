@@ -59,53 +59,6 @@ def test_CNGGZ_to_EETLL():
         ;
     """
 
-# Edge case: date_to is before date_from
-def test_CNGGZ_to_EETLL_invalid_date_range():
-    request = url + params.format('CNGGZ', 'EETLL', '2016-02-01', '2016-01-31')
-    response = requests.get(request)
-    body = response.json()
-
-    assert len(body) == 0
-
-# Edge case: invalid date format provided
-def test_CNGGZ_to_EETLL_invalid_date_format():
-    request = url + params.format('CNGGZ', 'EETLL', '2016-001', '2016-01-31')
-    response = requests.get(request)
-    body = response.json()
-
-    assert response.status_code == 400
-    assert body['error'] == 'Improper date format provided, use YYYY-MM-DD'
-
-# Edge case: missing parameters
-def test_CNGGZ_to_EETLL_param_missing():
-    request = url + '?origin={}&destination={}'.format('CNGGZ', 'EETLL')
-    response = requests.get(request)
-    body = response.json()
-
-    assert response.status_code == 400
-    assert body['error'] == 'Required parameter is missing or empty'
-
-# Edge case: fewer than 3 transactions on day, so null average
-def test_CNQIN_to_NOFRO_null_average():
-    request = url + params.format('CNQIN', 'NOFRO', '2016-01-01', '2016-01-31')
-    response = requests.get(request)
-    body = response.json()
-
-    # 2016-01-01
-    assert body[0]['average_price'] is None
-
-    '''
-    Verify manually:
-    '''
-    query = """
-        SELECT *
-        FROM prices
-        WHERE orig_code = 'CNQIN'
-        AND dest_code = 'NOFRO'
-        ORDER BY day, orig_code
-        ;
-    """
-
 ################################################################################
 #
 # (origin, destination) = (code, slug)
@@ -204,62 +157,37 @@ def test_CNQIN_to_scandinavia():
         ;
     """
 
-# Edge case: slug does not exist
-def test_CNQIN_to_scandinavialand():
-    request = url + params.format('CNQIN', 'scandinavialand', '2016-01-01', '2016-01-31')
-    response = requests.get(request)
-    body = response.json()
-
-    assert body['error'] == 'Non-existent code or slug provided'
-
-# Edge case: code does not exist
-def test_XXXXX_to_scandinavia():
-    request = url + params.format('XXXXX', 'scandinavia', '2016-01-01', '2016-01-31')
-    response = requests.get(request)
-    body = response.json()
-
-    assert body['error'] == 'Non-existent code or slug provided'
-
 ################################################################################
 #
 # (origin, destination) = (slug, code)
 #
 ################################################################################
 
-# Edge case: no transactions occurred
-def test_china_east_main_to_CNGGZ():
-    request = url + params.format('china_east_main', 'CNGGZ', '2016-01-01', '2016-01-31')
+# Check averages
+def test_china_main_to_EETLL():
+    request = url + params.format('china_main', 'EETLL', '2016-01-01', '2016-01-31')
     response = requests.get(request)
     body = response.json()
 
-    assert len(body) == 0
+    # 2016-01-03
+    average = int(body[2]['average_price'])
+    assert average == 1094
 
     '''
     Verify manually:
-
-    Note: china_east_main has no subslugs
     '''
     query = """
-        SELECT *
+        SELECT AVG(price)
         FROM prices
         WHERE orig_code IN (
             SELECT code
             FROM ports
-            WHERE parent_slug IN ('china_east_main')
+            WHERE parent_slug IN ('china_main', 'china_east_main', 'china_south_main', 'china_north_main')
         )
-        AND dest_code = 'CNGGZ'
-        AND day BETWEEN '2016-01-01'::DATE AND '2016-01-31'::DATE
+        AND dest_code ='EETLL'
+        AND day = '2016-01-03'::DATE
         ;
     """
-
-# Edge case: parameter missing
-def test_china_east_main_to_CNGGZ_param_missing():
-    request = url + '?origin={}&destination={}&date_from={}'.format('china_east_main', 'CNGGZ', '2016-01-31')
-    response = requests.get(request)
-    body = response.json()
-
-    assert response.status_code == 400
-    assert body['error'] == 'Required parameter is missing or empty'
 
 ################################################################################
 #
@@ -412,6 +340,110 @@ def test_china_north_main_to_uk_main():
         AND day = '2016-01-01'::DATE
         ;
     """
+
+################################################################################
+#
+# Edge cases
+#
+################################################################################
+
+# Edge case: date_to is before date_from
+def test_CNGGZ_to_EETLL_invalid_date_range():
+    request = url + params.format('CNGGZ', 'EETLL', '2016-02-01', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    assert len(body) == 0
+
+# Edge case: invalid date format provided
+def test_CNGGZ_to_EETLL_invalid_date_format():
+    request = url + params.format('CNGGZ', 'EETLL', '2016-001', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body['error'] == 'Improper date format provided, use YYYY-MM-DD'
+
+# Edge case: missing parameters
+def test_CNGGZ_to_EETLL_param_missing():
+    request = url + '?origin={}&destination={}'.format('CNGGZ', 'EETLL')
+    response = requests.get(request)
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body['error'] == 'Required parameter is missing or empty'
+
+# Edge case: fewer than 3 transactions on day, so null average
+def test_CNQIN_to_NOFRO_null_average():
+    request = url + params.format('CNQIN', 'NOFRO', '2016-01-01', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    # 2016-01-01
+    assert body[0]['average_price'] is None
+
+    '''
+    Verify manually:
+    '''
+    query = """
+        SELECT *
+        FROM prices
+        WHERE orig_code = 'CNQIN'
+        AND dest_code = 'NOFRO'
+        ORDER BY day, orig_code
+        ;
+    """
+
+# Edge case: slug does not exist
+def test_CNQIN_to_scandinavialand():
+    request = url + params.format('CNQIN', 'scandinavialand', '2016-01-01', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    assert body['error'] == 'Non-existent code or slug provided'
+
+# Edge case: code does not exist
+def test_XXXXX_to_scandinavia():
+    request = url + params.format('XXXXX', 'scandinavia', '2016-01-01', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    assert body['error'] == 'Non-existent code or slug provided'
+
+# Edge case: no transactions occurred
+def test_china_east_main_to_CNGGZ():
+    request = url + params.format('china_east_main', 'CNGGZ', '2016-01-01', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    assert len(body) == 0
+
+    '''
+    Verify manually:
+
+    Note: china_east_main has no subslugs
+    '''
+    query = """
+        SELECT *
+        FROM prices
+        WHERE orig_code IN (
+            SELECT code
+            FROM ports
+            WHERE parent_slug IN ('china_east_main')
+        )
+        AND dest_code = 'CNGGZ'
+        AND day BETWEEN '2016-01-01'::DATE AND '2016-01-31'::DATE
+        ;
+    """
+
+# Edge case: parameter missing
+def test_china_east_main_to_CNGGZ_param_missing():
+    request = url + '?origin={}&destination={}&date_from={}'.format('china_east_main', 'CNGGZ', '2016-01-31')
+    response = requests.get(request)
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body['error'] == 'Required parameter is missing or empty'
 
 # Edge case: origin is destination (no transactions occurred)
 def test_uk_sub_to_uk_sub():
